@@ -21,11 +21,11 @@ package networklist;
 use strict;
 
 my %config = (hive          => "Software",
-              osmask        => 22,
-              hasShortDescr => 1,
-              hasDescr      => 0,
-              hasRefs       => 0,
-              version       => 20161115);
+            osmask        => 22,
+            hasShortDescr => 1,
+            hasDescr      => 0,
+            hasRefs       => 0,
+            version       => 20161115);
 
 sub getConfig{return %config}
 
@@ -40,15 +40,15 @@ sub getVersion {return $config{version};}
 my $VERSION = getVersion();
 
 my %types = (0x47 => "wireless",
-             0x06 => "wired",
-             0x17 => "broadband (3g)");
+           0x06 => "wired",
+           0x17 => "broadband (3g)");
 
 sub pluginmain {
 	my $class = shift;
 	my $hive = shift;
 	::logMsg("Launching networklist v.".$VERSION);
 	::rptMsg("Launching networklist v.".$VERSION);
-    ::rptMsg("(".getHive().") ".getShortDescr()."\n");
+  ::rptMsg("(".getHive().") ".getShortDescr()."\n");
 	my $reg = Parse::Win32Registry->new($hive);
 	my $root_key = $reg->get_root_key;
 	my $base_path = "Microsoft\\Windows NT\\CurrentVersion\\NetworkList";
@@ -141,27 +141,55 @@ sub pluginmain {
 	else {
 		::rptMsg($key_path." not found.");
 	}
-  ::rptMsg("");
-# Get NLA info
-  $key_path = $base_path."\\Nla\\Cache\\Intranet";
-  if ($key = $root_key->get_subkey($key_path)) { 
-  	my @subkeys = $key->get_list_of_subkeys();
-  	if (scalar(@subkeys) > 0) {
-  		::rptMsg(sprintf "%-26s  %-18s  %-30s","Date","Gateway Address","Domain/IP");
-  		foreach my $s (@subkeys) {
-			my $net_time         = $s->get_timestamp();
-			my $net_name         = $s->get_name();
-			my $net_gateway_s    = $s->get_value("{5185491C-401D-491E-8C6F-07F6AFFF1A64}");
-			my $net_gateway_addr = "";
-			if($net_gateway_s) {
-				$net_gateway_addr = parseMacAddr($net_gateway_s->get_data());
+	::rptMsg("");
+# Harvest network card information
+	$key_path = "Microsoft\\Windows NT\\CurrentVersion\\NetworkCards";
+	$key;
+	my %nc;
+	if ($key = $root_key->get_subkey($key_path)) {
+		my @subkeys = $key->get_list_of_subkeys();
+		if (scalar(@subkeys) > 0) {
+			foreach my $s (@subkeys) {
+				my $service = $s->get_value("ServiceName")->get_data();
+				$nc{$service}{descr} = $s->get_value("Description")->get_data();
 			}
-  			::rptMsg(sprintf "%-26s  %-17s  %-30s",gmtime($net_time)." Z",$net_gateway_addr,$net_name);
-  		}
-  	}
-  }
+		}
+	}
+
+# Get NLA info
+	$key_path = $base_path."\\Nla\\Cache\\Intranet";
+	if ($key = $root_key->get_subkey($key_path)) { 
+		my @subkeys = $key->get_list_of_subkeys();
+		if (scalar(@subkeys) > 0) {
+			::rptMsg(sprintf "%-26s  %-38s  %-17s  %-30s","Date","Interface","Gateway Address","Domain/IP");
+			foreach my $s (@subkeys) {
+				my $net_time         = $s->get_timestamp();
+				my $net_name         = $s->get_name();
+				my @net_gateway_vals = $s->get_list_of_values();
+				my $net_gateway_s;
+				my $nic;
+				if(scalar(@net_gateway_vals) > 0) {
+					foreach my $val (@net_gateway_vals) {
+						#Note, this will only take one NIC per entry. 
+						#Unsure if it needs to support the potential for multiple
+						if(exists($nc{$val->get_name()})) {
+							$net_gateway_s = $val->get_data();
+							$nic = $val->get_name();
+						}
+					}
+				}
+				my $net_gateway_addr = "";
+				if($net_gateway_s) {
+					$net_gateway_addr = parseMacAddr($net_gateway_s);
+				}
+				::rptMsg(sprintf "%-26s  %-38s  %-17s  %-30s",gmtime($net_time)." Z",$nic,$net_gateway_addr,$net_name);
+			}
+		}
+	}
 }
 
+# Function takes in the data from a registry value, expecting it to contain a MAC address
+# Function returns the MAC address formatted as 12-34-56-78-90-ab
 sub parseMacAddr {
 	my $data = shift();
 	my $mac = uc(unpack("H*",$data));
