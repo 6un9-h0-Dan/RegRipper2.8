@@ -1,6 +1,9 @@
 #-----------------------------------------------------------
 # networkcards
 #
+# Change History:
+#    20161115 - Updated to include service name to tie to Nla\Cache
+#    20080325 - created
 # copyright 2008 H. Carvey, keydet89@yahoo.com
 #-----------------------------------------------------------
 package networkcards;
@@ -11,7 +14,7 @@ my %config = (hive          => "Software",
               hasDescr      => 0,
               hasRefs       => 0,
               osmask        => 22,
-              version       => 20080325);
+              version       => 20161115);
 
 sub getConfig{return %config}
 sub getShortDescr {
@@ -29,7 +32,7 @@ sub pluginmain {
 	my $hive = shift;
 	::logMsg("Launching networkcards v.".$VERSION);
 	::rptMsg("networkcards v.".$VERSION); # banner
-    ::rptMsg("(".getHive().") ".getShortDescr()."\n"); # banner
+	::rptMsg("(".getHive().") ".getShortDescr()."\n"); # banner
 	my $reg = Parse::Win32Registry->new($hive);
 	my $root_key = $reg->get_root_key;
 	my $key_path = "Microsoft\\Windows NT\\CurrentVersion\\NetworkCards";
@@ -48,7 +51,7 @@ sub pluginmain {
 			}
 			
 			foreach my $n (keys %nc) {
-				::rptMsg($nc{$n}{descr}."  [".gmtime($nc{$n}{lastwrite})."]");
+				::rptMsg("$n\n\t".$nc{$n}{descr}."  [".gmtime($nc{$n}{lastwrite})."]");
 			}
 		}
 		else {
