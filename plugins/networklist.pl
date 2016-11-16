@@ -5,6 +5,7 @@
 #
 #
 # Change History:
+#    20161115 - Updated to include profile GUIDs, DNS, and gateway addresses for Nla\Cache data
 #    20150812 - updated to include Nla\Cache data
 #    20120917 - updated to include NameType value
 #    20090812 - updated code to parse DateCreated and DateLastConnected
@@ -24,7 +25,7 @@ my %config = (hive          => "Software",
               hasShortDescr => 1,
               hasDescr      => 0,
               hasRefs       => 0,
-              version       => 20150812);
+              version       => 20161115);
 
 sub getConfig{return %config}
 
@@ -94,11 +95,10 @@ sub pluginmain {
 					foreach my $s (@sk) {
 						eval {
 							my $prof = $s->get_value("ProfileGuid")->get_data();
+							my $dns = $s->get_value("DnsSuffix")->get_data();
+							$nl{$prof}{DnsSuffix} = $dns;
 							my $tmp = substr($s->get_value("DefaultGatewayMac")->get_data(),0,6);
-							my $mac = uc(unpack("H*",$tmp));
-							my @t = split(//,$mac);
-							$nl{$prof}{DefaultGatewayMac} = $t[0].$t[1]."-".$t[2].$t[3].
-							         "-".$t[4].$t[5]."-".$t[6].$t[7]."-".$t[8].$t[9]."-".$t[10].$t[11];
+							$nl{$prof}{DefaultGatewayMac} = parseMacAddr($tmp);
 						};
 					}
 				}
@@ -111,11 +111,10 @@ sub pluginmain {
 					foreach my $s (@sk) {
 						eval {
 							my $prof = $s->get_value("ProfileGuid")->get_data();
+							my $dns = $s->get_value("DnsSuffix")->get_data();
+							$nl{$prof}{DnsSuffix} = $dns;
 							my $tmp = substr($s->get_value("DefaultGatewayMac")->get_data(),0,6);
-							my $mac = uc(unpack("H*",$tmp));
-							my @t = split(//,$mac);
-							$nl{$prof}{DefaultGatewayMac} = $t[0].$t[1]."-".$t[2].$t[3].
-							         "-".$t[4].$t[5]."-".$t[6].$t[7]."-".$t[8].$t[9]."-".$t[10].$t[11]; 
+							$nl{$prof}{DefaultGatewayMac} = parseMacAddr($tmp);
 						};
 					}
 				}
@@ -123,13 +122,14 @@ sub pluginmain {
 			
 # Now, display the information			
 			foreach my $n (keys %nl) {
-				my $str = sprintf "%-15s Gateway Mac: ".$nl{$n}{DefaultGatewayMac},$nl{$n}{ProfileName};
 				::rptMsg($nl{$n}{ProfileName});
 				::rptMsg("  Key LastWrite    : ".gmtime($nl{$n}{LastWrite})." Z");
 				::rptMsg("  DateLastConnected: ".$nl{$n}{DateLastConnected});
 				::rptMsg("  DateCreated      : ".$nl{$n}{DateCreated});
 				::rptMsg("  DefaultGatewayMac: ".$nl{$n}{DefaultGatewayMac});
 				::rptMsg("  Type             : ".$nl{$n}{Type});
+				::rptMsg("  Profile GUID     : ".$n);
+				::rptMsg("  DNS Suffix       : ".$nl{$n}{DnsSuffix});
 				::rptMsg("");
 			}
 			
@@ -147,15 +147,28 @@ sub pluginmain {
   if ($key = $root_key->get_subkey($key_path)) { 
   	my @subkeys = $key->get_list_of_subkeys();
   	if (scalar(@subkeys) > 0) {
-  		::rptMsg(sprintf "%-26s  %-30s","Date","Domain/IP");
+  		::rptMsg(sprintf "%-26s  %-18s  %-30s","Date","Gateway Address","Domain/IP");
   		foreach my $s (@subkeys) {
-  			::rptMsg(sprintf "%-26s  %-30s",gmtime($s->get_timestamp())." Z",$s->get_name());
+			my $net_time         = $s->get_timestamp();
+			my $net_name         = $s->get_name();
+			my $net_gateway_s    = $s->get_value("{5185491C-401D-491E-8C6F-07F6AFFF1A64}");
+			my $net_gateway_addr = "";
+			if($net_gateway_s) {
+				$net_gateway_addr = parseMacAddr($net_gateway_s->get_data());
+			}
+  			::rptMsg(sprintf "%-26s  %-17s  %-30s",gmtime($net_time)." Z",$net_gateway_addr,$net_name);
   		}
   	}
   }
 }
 
-
+sub parseMacAddr {
+	my $data = shift();
+	my $mac = uc(unpack("H*",$data));
+	my @t = split(//,$mac);
+	my $gateway = $t[0].$t[1]."-".$t[2].$t[3]."-".$t[4].$t[5]."-".$t[6].$t[7]."-".$t[8].$t[9]."-".$t[10].$t[11]; 
+	return $gateway;
+}
 
 sub parseDate128 {
 	my $date = $_[0];
